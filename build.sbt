@@ -26,7 +26,7 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "DigitSerialMultiplier"
+name := "chisel-module-template"
 
 version := "3.3.0"
 
