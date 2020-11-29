@@ -1,5 +1,13 @@
 ### Project Specific stuff
+!test_run_dir/**/*.v
 test_run_dir/*
+# my local setting
+src/main/scala/gcd
+src/test/scala/gcd
+*.txt
+launcher_test.sh
+*.xml
+
 ### XilinxISE template
 # intermediate build files
 *.bgn
