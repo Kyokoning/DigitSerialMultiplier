@@ -2,14 +2,14 @@
 * @Author: xnchen
 * @Date:   2020-11-25 17:03:53
 * @Last Modified by:   xnchen
-* @Last Modified time: 2020-11-29 15:50:18
+* @Last Modified time: 2020-12-02 17:09:06
 */
 
 package digitBasic
 
 import chisel3._
 import chisel3.util.Fill
-
+import chisel3.util.Cat
 class PE_nxn(n: Int) extends Module {
     val io = IO(new Bundle {
         val a_n = Input(UInt(n.W))
@@ -39,8 +39,9 @@ class PE_nxn(n: Int) extends Module {
     io.control_out := control_reg
 
     // 使用control_in信号控制斜向数据的输入
-    val control_n = Fill(n, io.control_in)
-    val t_ru_alloc_valid = io.t_ru_alloc & control_n
+    val control_n = Fill(n-1, io.control_in)
+    // val t_ru_alloc_valid = io.t_ru_alloc & control_n
+    val t_ru_alloc_valid = io.t_ru_alloc
 
     // t_lu_upline_reg用于锁存PE_n中第0行PE的t_lu数据。
     // 如果本PE_n是第一次计算，则说明在PE矩阵中处于最左侧一列，t_lu来自上一个PE_n的输入。如果不是第一次计算，则t_lu来自本PE_n之前锁存的t_lu
@@ -71,23 +72,24 @@ class PE_nxn(n: Int) extends Module {
     PE_down_lines(0).g_n := io.g_n
     PE_down_lines(0).b_1 := io.b_n(n-2)
     PE_down_lines(0).t_ru := PE_up_line.io.t_out(n-1, 0)
-    PE_down_lines(0).t_lu := t_lu_downlines_reg(0)
+    PE_down_lines(0).t_lu := Mux(control_reg.asBool, t_lu_downlines_reg(0), PE_up_line.io.t_out(n-1))
 
     // 第2至n-1行的连接
     for(i <- 1 until n-1) {
         PE_down_lines(i).a_n := io.a_n
         PE_down_lines(i).g_n := io.g_n
-        PE_down_lines(i).b_1 := io.b_n(n-1-i)
+        PE_down_lines(i).b_1 := io.b_n(n-2-i)
         PE_down_lines(i).t_ru := PE_down_lines(i-1).t_out(n-1, 0)
-        PE_down_lines(i).t_lu := t_lu_downlines_reg(i)
+        PE_down_lines(i).t_lu := Mux(control_reg.asBool, t_lu_downlines_reg(i), PE_down_lines(i-1).t_out(n-1))
     }
 
-    for(i <- 0 until n-1) {
-        t_out_alloc_temp_bool(n-2-i) := PE_down_lines(i).t_out(n-1).asBool() 
+    for(i <- 0 until n-2) {
+        t_out_alloc_temp_bool(n-3-i) := PE_down_lines(i).t_out(n-1).asBool() 
     }
 
-    io.t_out_alloc := t_out_alloc_temp_bool.asUInt()
-    io.t_out := PE_down_lines(n-2).t_out
+    io.t_out_alloc := (t_out_alloc_temp_bool.asUInt() & control_n)
+    io.t_out := Cat(PE_down_lines(n-2).t_out(n-1) & control_n(0), 
+                    PE_down_lines(n-2).t_out(n-2, 0))
 
 }
 

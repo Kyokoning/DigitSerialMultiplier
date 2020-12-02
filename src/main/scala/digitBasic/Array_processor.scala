@@ -2,7 +2,7 @@
 * @Author: xnchen
 * @Date:   2020-11-28 16:21:23
 * @Last Modified by:   xnchen
-* @Last Modified time: 2020-11-29 15:57:55
+* @Last Modified time: 2020-12-02 15:33:24
 */
 package digitBasic
 
@@ -25,9 +25,11 @@ class Array_processor(val w: Int, val n: Int) extends Module{
 
     val a_reg = RegInit(VecInit(Seq.fill(replicate_times-1)(0.U(n.W))))
     val g_reg = RegInit(VecInit(Seq.fill(replicate_times-1)(0.U(n.W))))
+    val b_wire = Wire(UInt((replicate_times*n).W))
     val res_reg = RegInit(VecInit(Seq.fill(replicate_times)(0.U((n-1).W)))) // res_reg只存本PE输出给左下方PE的数据，所以只设置n-1位，是上一个模块输出的n-2至0位
     a_reg(0) := io.a_n
     g_reg(0) := io.g_n
+    b_wire := io.b_w
     for(i <- 1 until replicate_times-1) {
         a_reg(i) := a_reg(i-1)
         g_reg(i) := g_reg(i-1)
@@ -41,10 +43,11 @@ class Array_processor(val w: Int, val n: Int) extends Module{
     // 第一个PE_nxn模块的连接
     PE_nxns(0).a_n := io.a_n
     PE_nxns(0).g_n := io.g_n
-    PE_nxns(0).b_n := io.b_w(w-1, w-n)
     PE_nxns(0).t_ru := 0.U
     PE_nxns(0).t_ru_alloc := 0.U
     PE_nxns(0).control_in := io.control_in
+
+
 
 
     // 接下来第2至replicate_times PE_nxn模块的连接
@@ -53,14 +56,19 @@ class Array_processor(val w: Int, val n: Int) extends Module{
         PE_nxns(i).g_n := g_reg(i-1)
         PE_nxns(i).t_ru := Cat(res_reg(i-1), PE_nxns(i-1).t_out(n-1))
         PE_nxns(i).t_ru_alloc := PE_nxns(i-1).t_out_alloc
-        PE_nxns(i).control_in := PE_nxns(i-1).control_out
+        PE_nxns(i).control_in := PE_nxns(i-1).control_out 
+    }
+
+    // 可能现b的在补零已经自动完成了
+    for(i <- 0 until replicate_times) {
+        PE_nxns(i).b_n := b_wire(replicate_times*n-1-n*i, replicate_times*n-n*(i+1))
     }
 
     // b要单独提出来赋值是因为要进行补零
-    for(i <- 1 until replicate_times-1){
-        PE_nxns(i).b_n := io.b_w(w-1-n*i, w-n*(i+1))
-    }
-    PE_nxns(replicate_times-1).b_n := Cat(io.b_w(w-1-n*(replicate_times-1), 0), 0.U)
+    // for(i <- 1 until replicate_times-1){
+    //     PE_nxns(i).b_n := io.b_w(w-1-n*i, w-n*(i+1))
+    // }
+    // PE_nxns(replicate_times-1).b_n := io.b_w(w-1-n*(replicate_times-1), 0)
 
     // 输出
     // 最后一个周期，没有模块进行旁路的异或，因此要保留之前的值，输出之前再进行一下异或
@@ -79,5 +87,5 @@ class Array_processor(val w: Int, val n: Int) extends Module{
 }
 
 object Array_processor_inst extends App{
-    chisel3.Driver.execute(args, () => new Array_processor(163, 32))
+    chisel3.Driver.execute(args, () => new Array_processor(163, 8))
 }
